@@ -1,7 +1,7 @@
 # WakaTime MCP for Cloudflare Workers
 
 An authenticated remote MCP server for WakaTime summaries. The Cloudflare Worker exposes the `wakatime_summaries` and `wakatime_today` tools over Streamable HTTP at `/mcp`.
-
+ 
 ## Local development
 
 Use Node.js 24 and npm. Install dependencies and create an ignored `.dev.vars` file containing your own values:
