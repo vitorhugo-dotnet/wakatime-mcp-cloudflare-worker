@@ -30,7 +30,10 @@ async function readJsonRpc(response: Response): Promise<unknown> {
   return body ? JSON.parse(body) : undefined;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("Cloudflare Worker MCP endpoint", () => {
   it("rejects missing and invalid credentials without exposing either secret", async () => {
@@ -191,7 +194,42 @@ describe("Cloudflare Worker MCP endpoint", () => {
       "2025-01-02",
       "2024-12-31",
     ]);
+    expect(requestedUrls.map((url) => url.searchParams.get("timezone"))).toEqual([
+      "Asia/Tokyo", "America/Los_Angeles",
+    ]);
+    expect(requestedUrls.every((url) => !url.searchParams.has("tz"))).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([400, 401, 403, 429, 500])("returns HTTP %i upstream failures as sanitized MCP tool errors", async (status) => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({
+      error: `Upstream rejected ${env.WAKATIME_API_KEY} ${env.MCP_AUTH_TOKEN}`,
+    }, { status })));
+    for (const name of ["wakatime_summaries", "wakatime_today"]) {
+      const response = await worker.fetch(jsonRpcRequest({
+        jsonrpc: "2.0", id: 20, method: "tools/call",
+        params: { name, arguments: name === "wakatime_summaries" ? { start: "2025-01-01", end: "2025-01-02" } : {} },
+      }, env.MCP_AUTH_TOKEN), env, {} as ExecutionContext);
+      expect(response.status).toBe(200);
+      const result = await readJsonRpc(response);
+      expect(result).toMatchObject({ result: { isError: true, content: [{ text: expect.stringContaining(`WakaTime API request failed: ${status}`) }] } });
+      expect(result).not.toHaveProperty("error");
+      expect(JSON.stringify(result)).not.toContain(env.WAKATIME_API_KEY);
+      expect(JSON.stringify(result)).not.toContain(env.MCP_AUTH_TOKEN);
+    }
+  });
+
+  it("returns a useful tool error when the API key binding is missing", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await worker.fetch(jsonRpcRequest({
+      jsonrpc: "2.0", id: 21, method: "tools/call",
+      params: { name: "wakatime_today", arguments: {} },
+    }, env.MCP_AUTH_TOKEN), { MCP_AUTH_TOKEN: env.MCP_AUTH_TOKEN }, {} as ExecutionContext);
+    expect(response.status).toBe(200);
+    const result = await readJsonRpc(response);
+    expect(result).toMatchObject({ result: { isError: true, content: [{ text: expect.stringContaining("WAKATIME_API_KEY is not configured") }] } });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns 404 outside the MCP endpoint", async () => {

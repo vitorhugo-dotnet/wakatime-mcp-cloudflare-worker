@@ -31,8 +31,14 @@ The build script typechecks TypeScript and runs Wrangler's deployment dry run. N
 
 ## Tools
 
-- `wakatime_summaries` accepts required `start` and `end` dates in `YYYY-MM-DD` format, plus optional `project` and `timezone` values.
+- `wakatime_summaries` accepts required valid `start` and `end` dates in `YYYY-MM-DD` format (`start` must be on or before `end`), plus optional `project` and IANA `timezone` values. Omitting `timezone` uses the WakaTime account's timezone.
 - `wakatime_today` accepts optional `project` and `timezone` values. The default timezone is `Asia/Tokyo`.
+
+Both tools use `GET https://api.wakatime.com/api/v1/users/current/summaries` with the documented `timezone` query parameter. Today's date is calculated in the same timezone sent to WakaTime. API-key authentication uses `Authorization: Basic <base64(API_KEY)>`, without adding a username/password colon, and requests accept JSON. Successful results preserve the complete summaries JSON envelope, including daily and aggregate fields.
+
+Upstream failures return MCP tool results with `isError: true`. Diagnostics include HTTP status, status text, sanitized `error`/`errors` messages, endpoint, and query parameter names. Request context contains no query values. Known credentials and named credential values are redacted; unrelated response fields and raw non-JSON bodies are excluded. Network and response-stream exceptions use controlled messages.
+
+Requests are not retried automatically. HTTP 429 includes rate-limit guidance and a valid `Retry-After` header when supplied. WakaTime also documents 302 redirects as possible rate limiting; redirects are reported without following them. The [official API docs](https://wakatime.com/developers) document `error`/`errors`, but do not guarantee their nested structure or a `Retry-After` header.
 
 ## Deploy
 

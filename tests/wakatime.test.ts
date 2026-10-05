@@ -24,9 +24,12 @@ describe("wakatimeGet", () => {
   it("uses the environment binding and encodes query values", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe(
-        "https://api.wakatime.com/api/v1/users/current/summaries?start=2025-01-01&end=2025-01-02&project=sample+project&tz=Asia%2FTokyo",
+        "https://api.wakatime.com/api/v1/users/current/summaries?start=2025-01-01&end=2025-01-02&project=sample+project&timezone=Asia%2FTokyo",
       );
       expect(new Headers(init?.headers).get("Authorization")).toBe("Basic c2VjcmV0LWtleQ==");
+      expect(new Headers(init?.headers).get("Accept")).toBe("application/json");
+      expect(init?.method).toBe("GET");
+      expect(init?.redirect).toBe("manual");
       return new Response('{"data":[]}', { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -35,7 +38,7 @@ describe("wakatimeGet", () => {
       wakatimeGet(
         { WAKATIME_API_KEY: "secret-key" },
         "users/current/summaries",
-        { start: "2025-01-01", end: "2025-01-02", project: "sample project", tz: "Asia/Tokyo" },
+        { start: "2025-01-01", end: "2025-01-02", project: "sample project", timezone: "Asia/Tokyo" },
       ),
     ).resolves.toBe('{"data":[]}');
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -45,11 +48,11 @@ describe("wakatimeGet", () => {
     await expect(wakatimeGet({}, "users/current/summaries", {})).rejects.toThrow(/WAKATIME_API_KEY/);
   });
 
-  it("reports upstream status without including the API key or response body", async () => {
+  it("reports upstream status without dumping non-JSON response bodies", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("secret-key", { status: 401 })));
     await expect(
       wakatimeGet({ WAKATIME_API_KEY: "secret-key" }, "users/current/summaries", {}),
-    ).rejects.toThrow("WakaTime API error: 401");
+    ).rejects.toThrow("WakaTime API request failed: 401");
     await expect(
       wakatimeGet({ WAKATIME_API_KEY: "secret-key" }, "users/current/summaries", {}),
     ).rejects.not.toThrow(/secret-key/);

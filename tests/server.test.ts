@@ -77,7 +77,8 @@ describe("WakaTime MCP server", () => {
       expect(url.searchParams.get("start")).toBe("2025-01-01");
       expect(url.searchParams.get("end")).toBe("2025-01-02");
       expect(url.searchParams.get("project")).toBe("demo");
-      expect(url.searchParams.get("tz")).toBe("Asia/Tokyo");
+      expect(url.searchParams.get("timezone")).toBe("Asia/Tokyo");
+      expect(url.searchParams.has("tz")).toBe(false);
       expect(new Headers(init?.headers).get("Authorization")).toBe("Basic c2VjcmV0LWtleQ==");
       return new Response('{"data":[]}', { status: 200 });
     });
@@ -106,19 +107,21 @@ describe("WakaTime MCP server", () => {
       const url = new URL(String(input));
       expect(url.searchParams.get("start")).toBe("2024-12-31");
       expect(url.searchParams.get("end")).toBe("2024-12-31");
-      expect(url.searchParams.get("tz")).toBe("America/Los_Angeles");
+      expect(url.searchParams.get("timezone")).toBe("America/Los_Angeles");
+      expect(url.searchParams.has("tz")).toBe(false);
       return new Response('{"data":[]}', { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const handler = createRpcHandler();
     await initialize(handler);
-    await rpc(handler, {
+    const result = await rpc(handler, {
       jsonrpc: "2.0",
       id: 4,
       method: "tools/call",
       params: { name: "wakatime_today", arguments: { timezone: "America/Los_Angeles" } },
     });
+    expect(result).toMatchObject({ result: { content: [{ text: '{"data":[]}' }] } });
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
@@ -132,6 +135,70 @@ describe("WakaTime MCP server", () => {
       params: { name: "wakatime_summaries", arguments: { start: "", end: "2025-01-02" } },
     });
     expect(result).toMatchObject({ result: { isError: true } });
+    expect(JSON.stringify(result)).not.toContain("secret-key");
+  });
+
+  it("uses Asia/Tokyo by default for today's date and upstream timezone", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-01-01T23:30:00Z"));
+    const urls: URL[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      urls.push(new URL(String(input)));
+      return new Response('{"data":[]}');
+    }));
+    const result = await rpc(createRpcHandler(), {
+      jsonrpc: "2.0", id: 10, method: "tools/call",
+      params: { name: "wakatime_today", arguments: { project: "sample project" } },
+    });
+    expect(result).toMatchObject({ result: { content: [{ text: '{"data":[]}' }] } });
+    expect(Object.fromEntries(urls[0]!.searchParams)).toEqual({
+      start: "2025-01-02", end: "2025-01-02", project: "sample project", timezone: "Asia/Tokyo",
+    });
+  });
+
+  it("omits optional timezone and project for summaries", async () => {
+    const urls: URL[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      urls.push(new URL(String(input)));
+      return new Response('{"data":[]}');
+    }));
+    const result = await rpc(createRpcHandler(), {
+      jsonrpc: "2.0", id: 11, method: "tools/call",
+      params: { name: "wakatime_summaries", arguments: { start: "2024-02-29", end: "2024-02-29" } },
+    });
+    expect(result).toMatchObject({ result: { content: [{ text: '{"data":[]}' }] } });
+    expect(Object.fromEntries(urls[0]!.searchParams)).toEqual({ start: "2024-02-29", end: "2024-02-29" });
+  });
+
+  it.each([
+    { start: "2025-02-29", end: "2025-03-01" },
+    { start: "2025-13-01", end: "2025-03-01" },
+    { start: "01/02/2025", end: "2025-03-01" },
+    { start: "2025-03-02", end: "2025-03-01" },
+    { start: "2025-01-01", end: "2025-01-02", timezone: "Not/A_Timezone" },
+    { start: "2025-01-01", end: "2025-01-02", timezone: "" },
+    { start: "2025-01-01", end: "2025-01-02", timezone: "+03:00" },
+  ])("rejects invalid summaries arguments before fetch: %j", async (arguments_) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await rpc(createRpcHandler(), {
+      jsonrpc: "2.0", id: 12, method: "tools/call",
+      params: { name: "wakatime_summaries", arguments: arguments_ },
+    });
+    expect(result).toMatchObject({ result: { isError: true } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["wakatime_summaries", "wakatime_today"])("returns upstream diagnostics as an MCP tool error for %s", async (name) => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "Invalid API key secret-key" }, {
+      status: 401, statusText: "Unauthorized",
+    })));
+    const result = await rpc(createRpcHandler(), {
+      jsonrpc: "2.0", id: 13, method: "tools/call",
+      params: { name, arguments: name === "wakatime_summaries" ? { start: "2025-01-01", end: "2025-01-02" } : {} },
+    });
+    expect(result).toMatchObject({ result: { isError: true, content: [{ type: "text", text: expect.stringContaining("401 Unauthorized: Invalid API key [REDACTED]") }] } });
+    expect(result).not.toHaveProperty("error");
     expect(JSON.stringify(result)).not.toContain("secret-key");
   });
 
