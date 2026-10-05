@@ -72,7 +72,7 @@ Expected: failures identify the missing `createServer` export or tool behavior.
 
 - [ ] **Step 6: Add compatible MCP server dependencies and implement `createServer(env)`**
 
-Add the current compatible stable `agents` and `@modelcontextprotocol/server` dependencies, retaining Zod 4. Use `McpServer` and its `registerTool` API in `src/server.ts`; expose the existing tool names and descriptions with equivalent schemas. Register handlers that call `wakatimeGet` and `todayYmd`. Remove `StdioServerTransport`, `shouldRunMain`, `realpathSync`, `pathToFileURL`, direct process environment access, and CLI startup behavior from the existing implementation. Remove the package `bin` and `prepare` entries from `package.json`; remove `scripts/add-shebang.js` if no references remain.
+Add `agents@0.26.0`, its required `@modelcontextprotocol/server@2.0.0` peer, and update `@modelcontextprotocol/sdk` to `^1.30.0` to match Agents' required peer; retain Zod 4. Use `McpServer` and its `registerTool` API in `src/server.ts`; expose the existing tool names and descriptions with equivalent schemas. Register handlers that call `wakatimeGet` and `todayYmd`. Remove `StdioServerTransport`, `shouldRunMain`, `realpathSync`, `pathToFileURL`, direct process environment access, and CLI startup behavior from the existing implementation. Remove the package `bin` and `prepare` entries from `package.json`; remove `scripts/add-shebang.js` if no references remain.
 
 - [ ] **Step 7: Run all tests and build**
 
@@ -89,6 +89,9 @@ Expected: exit 0 with no type errors.
 - Modify: `src/index.ts`
 - Create: `tests/auth.test.ts`
 - Create: `tests/worker.test.ts`
+- Modify: `package.json`
+- Modify: `package-lock.json`
+- Modify: `tsconfig.json`
 
 **Interfaces:**
 - `src/auth.ts` exports `isAuthorized(request: Request, expectedToken?: string): Promise<boolean>`; reject a missing/empty expected token, parse the Bearer scheme case-insensitively, SHA-256 hash both token strings with Web Crypto, and compare fixed-length digest bytes without early exit.
@@ -116,9 +119,9 @@ In `tests/worker.test.ts`, call the exported fetch handler with Cloudflare-like 
 Run: `npm test -- tests/worker.test.ts`
 Expected: failures identify the missing Worker export or endpoint behavior.
 
-- [ ] **Step 6: Implement the Worker fetch entrypoint**
+- [ ] **Step 6: Add Cloudflare Worker types and implement the fetch entrypoint**
 
-Wrap the stateless `createMcpHandler` with route and bearer checks, passing bindings to the server factory. Make the token check occur before parsing or forwarding the MCP request. Return JSON-RPC-compatible MCP handler responses unchanged; use 401 for authentication failure and 404 for other paths. Do not log authorization values or request bodies.
+Add `@cloudflare/workers-types` as a development dependency and include its ambient types in the TypeScript configuration as needed. Wrap the stateless `createMcpHandler` with route and bearer checks, passing bindings to the server factory. Make the token check occur before parsing or forwarding the MCP request. Return JSON-RPC-compatible MCP handler responses unchanged; use 401 for authentication failure and 404 for other paths. Do not log authorization values or request bodies.
 
 - [ ] **Step 7: Run protocol tests and typecheck**
 
