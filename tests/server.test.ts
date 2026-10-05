@@ -135,6 +135,24 @@ describe("WakaTime MCP server", () => {
     expect(JSON.stringify(result)).not.toContain("secret-key");
   });
 
+  it("rejects unexpected arguments instead of silently stripping them", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const handler = createRpcHandler();
+    await initialize(handler);
+    const result = await rpc(handler, {
+      jsonrpc: "2.0",
+      id: 7,
+      method: "tools/call",
+      params: {
+        name: "wakatime_summaries",
+        arguments: { start: "2025-01-01", end: "2025-01-02", unexpected: "value" },
+      },
+    });
+    expect(result).toMatchObject({ result: { isError: true } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("rejects an invalid timezone before making a WakaTime request", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

@@ -63,7 +63,7 @@ Move the existing API and date logic to `src/wakatime.ts`; pass `Env` explicitly
 
 - [x] **Step 4: Add tool registration tests first**
 
-In `tests/server.test.ts`, pass `createServer` to `createMcpHandler` and issue Streamable HTTP JSON-RPC initialize, tools/list, and tools/call requests. Assert exactly `wakatime_summaries` and `wakatime_today`; call both with valid inputs and controlled fetch responses; assert summary query fields, timezone conversion to `tz`, and same-day start/end for today. Assert malformed arguments and invalid timezones produce MCP protocol errors.
+In `tests/server.test.ts`, pass `createServer` to `createMcpHandler` and issue Streamable HTTP JSON-RPC initialize, tools/list, and tools/call requests. Assert exactly `wakatime_summaries` and `wakatime_today`; call both with valid inputs and controlled fetch responses; assert summary query fields, timezone conversion to `tz`, and same-day start/end for today. Assert malformed arguments, unexpected properties, and invalid timezones produce MCP tool errors without calling WakaTime.
 
 - [x] **Step 5: Run server tests and confirm they fail against the missing factory**
 
@@ -112,7 +112,7 @@ Add the exact `isAuthorized` interface above and compare the two SHA-256 digests
 
 - [x] **Step 4: Write Worker request tests**
 
-In `tests/worker.test.ts`, call the exported fetch handler with Cloudflare-like bindings. Assert unauthenticated and invalid-token POST requests to `/mcp` return 401; send an unauthenticated `tools/call` request and assert the mocked WakaTime fetch is never called, proving rejection occurs before tool execution. A valid token must allow JSON-RPC initialize and tools/list exchanges and return both tools; non-`/mcp` paths return 404. Assert no response body or headers contain either configured secret.
+In `tests/worker.test.ts`, call the exported fetch handler with Cloudflare-like bindings. Assert unauthenticated and invalid-token POST requests to `/mcp` return 401; send an unauthenticated `tools/call` request and assert the mocked WakaTime fetch is never called, proving rejection occurs before tool execution. A valid token must allow JSON-RPC initialize and tools/list exchanges and return both tools, then allow both tool calls to use the bound WakaTime API key; non-`/mcp` paths return 404. Assert no response body or headers contain either configured secret.
 
 - [x] **Step 5: Run Worker tests and confirm they fail before adding the fetch handler**
 

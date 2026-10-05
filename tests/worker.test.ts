@@ -115,6 +115,85 @@ describe("Cloudflare Worker MCP endpoint", () => {
     ]);
   });
 
+  it("runs both WakaTime tools through the authenticated Worker binding", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-01-01T02:00:00.000Z"));
+    const requestedUrls: URL[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      requestedUrls.push(url);
+      expect(new Headers(init?.headers).get("Authorization")).toBe("Basic d2FrYXRpbWUtc2VjcmV0LWtleQ==");
+      return new Response('{"data":[{"grand_total":"1 hr"}]}', { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await worker.fetch(
+      jsonRpcRequest(
+        {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-11-25",
+            capabilities: {},
+            clientInfo: { name: "test-client", version: "1.0.0" },
+          },
+        },
+        env.MCP_AUTH_TOKEN,
+      ),
+      env,
+      {} as ExecutionContext,
+    );
+
+    const summaries = await worker.fetch(
+      jsonRpcRequest(
+        {
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: {
+            name: "wakatime_summaries",
+            arguments: { start: "2025-01-01", end: "2025-01-02", timezone: "Asia/Tokyo" },
+          },
+        },
+        env.MCP_AUTH_TOKEN,
+      ),
+      env,
+      {} as ExecutionContext,
+    );
+    const today = await worker.fetch(
+      jsonRpcRequest(
+        {
+          jsonrpc: "2.0",
+          id: 3,
+          method: "tools/call",
+          params: { name: "wakatime_today", arguments: { timezone: "America/Los_Angeles" } },
+        },
+        env.MCP_AUTH_TOKEN,
+      ),
+      env,
+      {} as ExecutionContext,
+    );
+
+    expect(summaries.status).toBe(200);
+    expect(await readJsonRpc(summaries)).toMatchObject({
+      result: { content: [{ text: '{"data":[{"grand_total":"1 hr"}]}' }] },
+    });
+    expect(today.status).toBe(200);
+    expect(await readJsonRpc(today)).toMatchObject({
+      result: { content: [{ text: '{"data":[{"grand_total":"1 hr"}]}' }] },
+    });
+    expect(requestedUrls.map((url) => url.searchParams.get("start"))).toEqual([
+      "2025-01-01",
+      "2024-12-31",
+    ]);
+    expect(requestedUrls.map((url) => url.searchParams.get("end"))).toEqual([
+      "2025-01-02",
+      "2024-12-31",
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("returns 404 outside the MCP endpoint", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/other"),
