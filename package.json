@@ -3,8 +3,9 @@
   "version": "0.0.2",
   "description": "",
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "build": "tsc -p .",
+    "dev": "wrangler dev",
+    "build": "tsc --noEmit -p . && wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
     "test": "vitest run"
   },
   "keywords": [],
@@ -12,16 +13,16 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
-    "@modelcontextprotocol/server": "^2.0.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "agents": "^0.26.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261005.1",
     "@types/node": "^25.0.9",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "^4.147.0"
   }
 }

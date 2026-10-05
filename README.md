@@ -1,74 +1,71 @@
-# 🚀 wakatime-mcp
+# WakaTime MCP for Cloudflare Workers
 
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+An authenticated remote MCP server for WakaTime summaries. The Cloudflare Worker exposes the `wakatime_summaries` and `wakatime_today` tools over Streamable HTTP at `/mcp`.
 
-An MCP server that exposes WakaTime summary tools over stdio. It proxies the
-WakaTime Summaries API with your API key and returns raw JSON for clients to
-parse as needed.
+## Local development
 
-## 📋 Summary
+Use Node.js 24 and npm. Install dependencies and create an ignored `.dev.vars` file containing your own values:
 
-Key features:
-
-- 🔐 Uses `WAKATIME_API_KEY` for authentication
-- 📊 Exposes daily summaries and today’s summary
-- 📦 Runs via `npx` (no install required)
-
-## 🚀 Quick Start (npx)
-
-```bash
-export WAKATIME_API_KEY="YOUR_API_KEY"
-npx wakatime-mcp
+```text
+WAKATIME_API_KEY=<your WakaTime API key>
+MCP_AUTH_TOKEN=<a long random token for MCP clients>
 ```
 
-## 🤖 MCP Config (npx)
+Keep `.dev.vars` private. Start the Worker with:
 
-```json
-{
-  "command": "npx",
-  "args": ["-y", "github:geeknees/wakatime-mcp"],
-  "env": {
-    "WAKATIME_API_KEY": "YOUR_API_KEY"
-  }
-}
+```sh
+npm ci
+npm run dev
 ```
 
-## 🧰 Available Tools
+Wrangler serves the endpoint at `http://localhost:8787/mcp`. Each MCP request must include `Authorization: Bearer <MCP_AUTH_TOKEN>`.
 
-### `wakatime_summaries`
+Run checks with:
 
-```json
-{
-  "tool": "wakatime_summaries",
-  "arguments": {
-    "start": "2025-01-01",
-    "end": "2025-01-07",
-    "project": "my-project",
-    "timezone": "Asia/Tokyo"
-  }
-}
-```
-
-### `wakatime_today`
-
-```json
-{
-  "tool": "wakatime_today",
-  "arguments": {
-    "project": "my-project",
-    "timezone": "Asia/Tokyo"
-  }
-}
-```
-
-## ⚙️ Configuration
-
-| Environment Variable | Description | Required |
-| --- | --- | --- |
-| `WAKATIME_API_KEY` | WakaTime API key | ✅ |
-
-## 🧪 Tests
-
-```bash
+```sh
 npm test
+npm run build
 ```
+
+The build script typechecks TypeScript and runs Wrangler's deployment dry run. Neither the test suite nor build needs live WakaTime or Cloudflare credentials.
+
+## Tools
+
+- `wakatime_summaries` accepts required `start` and `end` dates in `YYYY-MM-DD` format, plus optional `project` and `timezone` values.
+- `wakatime_today` accepts optional `project` and `timezone` values. The default timezone is `Asia/Tokyo`.
+
+## Deploy
+
+Set the WakaTime API key and the separate MCP bearer token as Cloudflare Worker secrets. Wrangler prompts for each secret value:
+
+```sh
+npx wrangler secret put WAKATIME_API_KEY
+npx wrangler secret put MCP_AUTH_TOKEN
+npm run deploy
+```
+
+The Worker requires both secrets at runtime. An unset MCP token rejects all requests. Keep the WakaTime API key in the Worker secret store; it is not part of the build or GitHub Actions deployment environment.
+
+## Configure an MCP client
+
+Use the deployed Worker URL with `/mcp` and supply the bearer token in the `Authorization` header. For clients with HTTP header configuration, the shape is:
+
+```json
+{
+  "url": "https://<worker-name>.<account-subdomain>.workers.dev/mcp",
+  "headers": {
+    "Authorization": "Bearer <MCP_AUTH_TOKEN>"
+  }
+}
+```
+
+The client only needs the MCP bearer token. Never provide it with the WakaTime API key.
+
+## CI and deployment
+
+GitHub Actions runs separate `test`, `build`, and `deploy` jobs. The build job runs after tests succeed; deployment waits for both test and build. Deployment runs only on a push to `main`. Configure these repository Actions secrets:
+
+- `CLOUDFLARE_API_TOKEN` with permission to deploy Workers.
+- `CLOUDFLARE_ACCOUNT_ID` for the Cloudflare account.
+
+Set `WAKATIME_API_KEY` and `MCP_AUTH_TOKEN` directly in Cloudflare with Wrangler before using the deployed endpoint. CI never reads or prints those values.

@@ -70,6 +70,17 @@ describe("Cloudflare Worker MCP endpoint", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("requires authentication for MCP GET and DELETE requests too", async () => {
+    for (const method of ["GET", "DELETE"]) {
+      const response = await worker.fetch(
+        new Request("http://localhost/mcp", { method }),
+        env,
+        {} as ExecutionContext,
+      );
+      expect(response.status).toBe(401);
+    }
+  });
+
   it("serves initialize and tool discovery with a valid token", async () => {
     const initialize = await worker.fetch(
       jsonRpcRequest(
